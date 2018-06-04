@@ -1,0 +1,233 @@
+<!--
+  Copyright 2017 Michael Jacobsen.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<script type="text/x-red" data-template-name="rfm12 debug">
+    <div class="form-row node-input-client">
+        <label for="node-input-client"><i class="fa fa-random"></i> <span data-i18n="rfm12.label.client"></span></label>
+        <input type="text" id="node-input-client">
+    </div>
+    <div class="form-row">
+        <label for="node--input-name"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]rfm12.label.name">
+    </div>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('rfm12 debug',{
+        category: 'rfm12-input',
+        paletteLabel: 'Debug',
+        defaults: {
+            client:   {type:  "rfm12-client", required:true },
+            name:     {value: "" }
+        },
+        color:"#d8bfd8",
+        inputs:0,
+        outputs:1,
+        icon: "bridge.png",
+        label: function() {
+            return this.name || "rfm12 debug"
+        },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : ""
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="rfm12 ctrl-status">
+    <div class="form-row node-input-client">
+        <label for="node-input-client"><i class="fa fa-random"></i> <span data-i18n="rfm12.label.client"></span></label>
+        <input type="text" id="node-input-client">
+    </div>
+    <div class="form-row">
+        <label for="node--input-name"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]rfm12.label.name">
+    </div>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('rfm12 ctrl-status',{
+        category: 'rfm12-input',
+        paletteLabel: 'Ctrl Status',
+        defaults: {
+            client:   {type:  "rfm12-client", required:true },
+            name:     {value: "" }
+        },
+        color:"#d8bfd8",
+        inputs:0,
+        outputs:1,
+        icon: "bridge.png",
+        label: function() {
+            return this.name || "rfm12 ctrl-status"
+        },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : ""
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="rfm12 device-status">
+    <div class="form-row node-input-client">
+        <label for="node-input-client"><i class="fa fa-random"></i> <span data-i18n="rfm12.label.client"></span></label>
+        <input type="text" id="node-input-client">
+    </div>
+    <div class="form-row node-input-nodeid">
+        <label for="node-input-nodeid"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.nodeid"></span></label>
+        <input type="text" id="node-input-nodeid" data-i18n="[placeholder]rfm12.placeholder.nodeid">
+    </div>
+    <div class="form-row node-input-timeout">
+        <label for="node-input-timeout"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.timeout"></span></label>
+        <input type="text" id="node-input-timeout" data-i18n="[placeholder]rfm12.placeholder.timeout">
+    </div>
+    <div class="form-row">
+        <label for="node--input-name"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]rfm12.label.name">
+    </div>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('rfm12 device-status',{
+        category: 'rfm12-input',
+        paletteLabel: 'Device Status',
+        defaults: {
+            client:   {type:  "rfm12-client", required:true },
+            nodeid:   {value: "", validate:RED.validators.number(), required:true },
+            timeout:  {value: "", validate:RED.validators.number(), required:true },
+            name:     {value: "" }
+        },
+        color:"#d8bfd8",
+        inputs:0,
+        outputs:1,
+        icon: "bridge.png",
+        label: function() {
+            return this.name || "rfm12 device-status"
+        },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : ""
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="rfm12 io">
+    <div class="form-row node-input-client">
+        <label for="node-input-client"><i class="fa fa-random"></i> <span data-i18n="rfm12.label.client"></span></label>
+        <input type="text" id="node-input-client">
+    </div>
+    <div class="form-row node-input-nodeid">
+        <label for="node-input-nodeid"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.nodeid"></span></label>
+        <input type="text" id="node-input-nodeid" data-i18n="[placeholder]rfm12.placeholder.nodeid">
+    </div>
+    <div class="form-row">
+        <label for="node-input-service"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.service"></span></label>
+        <select id="node-input-service" style="width:125px !important">
+            <option value="onramp">onramp</option>
+            <option value="offramp">offramp</option>
+            <option value="status">status</option>
+        </select>
+    </div>
+    <div class="form-row node-input-dataid">
+        <label for="node-input-dataid"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.dataid"></span></label>
+        <input type="text" id="node-input-dataid" data-i18n="[placeholder]rfm12.placeholder.dataid">
+    </div>
+    <div class="form-row">
+        <label for="node-input-datatype"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.datatype"></span></label>
+        <select id="node-input-datatype" style="width:125px !important">
+            <option value="uint8">uint8</option>
+            <option value="uint16">uint16</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]rfm12.label.name">
+    </div>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('rfm12 io',{
+        category: 'rfm12-input',
+        paletteLabel: 'Bus I/O',
+        defaults: {
+            client:   {type:  "rfm12-client", required:true },
+            nodeid:   {value: "", validate:RED.validators.number(), required:true },
+            service:  {value: "" },
+            dataid:   {value: "", validate:RED.validators.number(), required:true },
+            datatype: {value: "" },
+            name:     {value: "" }
+        },
+        color:"#d8bfd8",
+        inputs: 1,
+        outputs: 1,
+        icon: "bridge.png",
+        label: function() {
+            return this.name || "rfm12 io"
+        },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : ""
+        },
+        oneditsave: function() {
+            //this.service = $("#node-config-input-nodename").val(this.nodename)
+        }        
+    });
+</script>
+
+<!--
+    Configuration Node
+
+-->
+<script type="text/x-red" data-template-name="rfm12-client">
+    <div class="form-row">
+        <label for="node-config-input-serialport"><i class="fa fa-random"></i> <span data-i18n="rfm12.label.serialport"></span></label>
+        <input type="text" id="node-config-input-serialport" style="width:60%;" data-i18n="[placeholder]rfm12.placeholder.serialport">
+        <a id="node-config-lookup-serial" class="btn"><i id="node-config-lookup-serial-icon" class="fa fa-search"></i></a>
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-serialbaud"><i class="fa fa-globe"></i> <span data-i18n="rfm12.label.serialbaud"></span></label>
+        <select id="node-config-input-serialbaud" style="width:125px !important">
+            <option value="115200">115200</option>
+            <option value="57600">57600</option>
+            <option value="38400">38400</option>
+            <option value="19200">19200</option>
+            <option value="9600">9600</option>
+            <option value="4800">4800</option>
+            <option value="2400">2400</option>
+            <option value="1200">1200</option>
+            <option value="600">600</option>
+            <option value="300">300</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> <span data-i18n="rfm12.label.name"></span></label>
+        <input type="text" id="node-config-input-name" data-i18n="[placeholder]rfm12.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="rfm12-client">
+    <p>RFM12B Message Bus Client - configuration<p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('rfm12-client', {
+        category: 'config',
+        defaults: {
+            serialport: { value: "",      required: true },
+            serialbaud: { value: "115200", required: true, validate:RED.validators.number() },
+            name:       { value: ""}
+        },
+        label: function() {
+            this.serialbaud = this.serialbaud || 57600
+
+            return this.serialport + ":" + this.serialbaud
+        },
+        oneditprepare: function() {
+        }        
+    });
+</script>

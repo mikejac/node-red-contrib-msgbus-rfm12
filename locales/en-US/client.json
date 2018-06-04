@@ -1,0 +1,36 @@
+{
+    "rfm12": {
+        "label": {
+            "serialport": "Port",
+            "serialbaud": "Speed",
+            "name": "Name",
+            "client": "Client",
+            "nodeid": "Node",
+            "service": "Service",
+            "dataid": "Data ID",
+            "datatype": "Data Type",
+            "timeout": "Timeout"
+        },
+        "placeholder": {
+            "serialport": "e.g. /dev/ttyUSB0",
+            "serialbaud": "115200",
+            "name": "Name",
+            "nodeid": "Numerical Node ID",
+            "dataid": "Numerical Data ID",
+            "datatype": "uint8",
+            "timeout": "Timeout in minutes"
+        },
+        "state": {
+            "connected": "Connected to port: __serialport__",
+            "disconnected": "Disconnected from port: __serialport__",
+            "connect-failed": "Connection failed to port: __serialport__"
+        },
+        "errors": {
+            "missing-config": "missing broker configuration",
+
+            "not-defined": "topic not defined",
+            "invalid-topic": "Invalid topic specified",
+            "nonclean-missingclientid": "No client ID set, using clean session"
+        }
+    }
+}
