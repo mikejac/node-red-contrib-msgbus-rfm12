@@ -719,7 +719,7 @@ module.exports = function(RED) {
         node.send(msg)
 
         node.status({fill: "red", shape: "ring", text: "node-red:common.status.disconnected"})*/
-        RED.log.debug("RFM12:aliveTimerExpired(): " + node.node.nodeid.toString())
+        RED.log.debug("RFM12:aliveTimerExpired(): " + node.nodeid.toString())
         
         /*
         node.wdtStatus:
