@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 Michael Jacobsen.
+ * Copyright 2018 Michael Jacobsen.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,9 @@
 module.exports = function(RED) {
     "use strict"
 
-    var async      = require("async")
-    var SerialPort = require("serialport")
+    const async      = require("async")
+    const SerialPort = require("serialport")
+    const Readline   = require("@serialport/parser-readline")
 
 	/******************************************************************************************************************
 	 * 
@@ -37,9 +38,68 @@ module.exports = function(RED) {
         this.debugs         = {}
         this.ctrlstatus     = {}
         this.devicestatus   = {}
-        this.alive          = null
+        this.port           = null
+        this.wdt            = 65;
+        this.wdtStatus      = -1;
+        this.timerHandle    = null;
 
         var node = this
+
+        /******************************************************************************************************************
+         * functions
+         *
+         */
+        this.disableTimer = function() {
+            if (node.timerHandle) {    
+                clearTimeout(node.timerHandle);
+                node.timerHandle = null;    
+            }
+        }
+          
+        this.enableTimer = function() {
+            if (node.timerHandle) {
+                RED.log.debug("RFM12MsgBusClientNode(enableTimer): clear timer");
+                clearTimeout(node.timerHandle);
+                node.timerHandle = null;
+            }
+
+            if (node.wdt > 0) {
+                RED.log.debug("RFM12MsgBusClientNode(enableTimer): node.wdt > 0");
+                node.timerHandle = setTimeout(node.timerProc.bind(this), node.wdt * 1000);
+            } else {
+                RED.log.debug("RFM12MsgBusClientNode(enableTimer): node.wdt <= 0");
+            }
+        }
+          
+        this.resetTimer = function() {
+            if (node.wdt <= 0) {
+                return;
+            }
+
+            node.enableTimer();
+            RED.log.debug("RFM12MsgBusClientNode(resetTimer): node.wdtStatus = " + node.wdtStatus)
+
+            if (node.wdtStatus != 1) {
+                node.wdtStatus = 1
+            }
+        }
+
+        this.timerProc = function() {
+            RED.log.debug("RFM12MsgBusClientNode(timerproc): run; wdt = " + node.wdt);
+
+            if (node.wdtStatus != 0) {
+                node.wdtStatus = 0
+    
+                RED.log.debug("RFM12MsgBusClientNode(timerproc): timeout");
+
+                var msg = {
+                    topic:   "status",
+                    payload: "timeout"
+                }
+
+                callStatusHandlers(node, msg)
+            }
+        }
 
         /******************************************************************************************************************
          * define functions called by nodes
@@ -59,20 +119,16 @@ module.exports = function(RED) {
             delete node.users[rfm12Node.id];
 
             if (node.closing) {
+                RED.log.debug("RFM12MsgBusClientNode::deregister(): done; node.closing")
                 return done()
             }
 
             if (Object.keys(node.users).length === 0) {
-                /*if (node.blynk && node.client.connected) {
-                    //return node.client.end(done);
-                } else {
-                    //node.client.end();
-                    return done()
-                }*/
-
+                RED.log.debug("RFM12MsgBusClientNode::deregister(): done; no more clients")
                 return done()
             }
 
+            RED.log.debug("RFM12MsgBusClientNode::deregister(): done")
             done()
         }
 
@@ -84,11 +140,12 @@ module.exports = function(RED) {
 
                 node.port = new SerialPort(node.serialport, 
                                             {
-                                                baudrate: node.serialbaud,
+                                                baudRate: node.serialbaud,
                                                 dataBits: 8,
-                                                stopBits: 1,
-                                                parser:   SerialPort.parsers.readline('\n')
+                                                stopBits: 1
                                             })
+
+                node.parser = node.port.pipe(new Readline({ delimiter: '\n' }));
 
                 // error handler
                 node.port.on('error', function(err) {
@@ -114,7 +171,7 @@ module.exports = function(RED) {
                         }
                     }
 
-                    startAliveTimer(node)
+                    node.enableTimer()
                 })
 
                 // disconnect handler
@@ -140,12 +197,12 @@ module.exports = function(RED) {
                 })
 
                 // incoming data handler
-                node.port.on('data', function (data) {
-                    RED.log.debug("RFM12MsgBusClientNode(data): data = " + data)
+                node.parser.on('data', function (data) {
+                    RED.log.debug("RFM12MsgBusClientNode(data): data = '" + data + "'")
 
                     if(data[0] == '%') {                    // alive
                         RED.log.debug("RFM12MsgBusClientNode(data): controller alive")
-                        startAliveTimer(node)
+                        node.resetTimer()
                     } else if(data[0] == '!') {             // incoming data from a node
                         var posType    = 1
                         var posNode    = data.indexOf(':', posType) + 1
@@ -392,9 +449,23 @@ module.exports = function(RED) {
             node.port.write(s, callback)
         }, 20)
 
-        this.on('close', function(done) {
+        /******************************************************************************************************************
+         * notifications coming from Node-RED
+         *
+         */
+        this.on('close', function(removed, done) {
+            node.closing = true;
+
             node.port.close()
-        })
+
+            if (removed) {
+                // this node has been deleted
+            } else {
+                // this node is being restarted
+            }
+
+            done();
+        });
     }
 
     RED.nodes.registerType("rfm12-client", RFM12MsgBusClientNode)
@@ -412,16 +483,18 @@ module.exports = function(RED) {
 
         var node = this
 
+        RED.log.debug("RFM12MsgBusDebugNode(): start")
+
         if (this.clientConn) {
             this.status({fill: "red", shape: "ring", text: "node-red:common.status.disconnected"})
 
-            node.clientConn.register(this)
+            node.clientConn.register(node)
 
             this.clientConn.debug_sub(function(msg) {
                 //
                 // incoming event
                 //
-                RED.log.debug("RFM12MsgBusValueNode(): callback; msg = " + JSON.stringify(msg))
+                RED.log.debug("RFM12MsgBusDebugNode(): callback; msg = " + JSON.stringify(msg))
 
                 node.send(msg)
             }, node)
@@ -433,11 +506,21 @@ module.exports = function(RED) {
             this.error(RED._("rfm12.errors.missing-config"))
         }
 
-        this.on('close', function(done) {
+        /******************************************************************************************************************
+         * notifications coming from Node-RED
+         *
+         */
+        this.on('close', function(removed, done) {
             if (node.clientConn) {
                 node.clientConn.deregister(node, done)
             }
-        })
+
+            if (removed) {
+                // this node has been deleted
+            } else {
+                // this node is being restarted
+            }
+        });
     }
 
     RED.nodes.registerType("rfm12 debug", RFM12MsgBusDebugInNode)
@@ -476,11 +559,21 @@ module.exports = function(RED) {
             this.error(RED._("rfm12.errors.missing-config"))
         }
 
-        this.on('close', function(done) {
+        /******************************************************************************************************************
+         * notifications coming from Node-RED
+         *
+         */
+        this.on('close', function(removed, done) {
             if (node.clientConn) {
                 node.clientConn.deregister(node, done)
             }
-        })
+
+            if (removed) {
+                // this node has been deleted
+            } else {
+                // this node is being restarted
+            }
+        });
     }
 
     RED.nodes.registerType("rfm12 ctrl-status", RFM12MsgBusCtrlStatusInNode)
@@ -493,18 +586,113 @@ module.exports = function(RED) {
         RED.nodes.createNode(this, config)
 
         // configuration options passed by Node Red
-        this.client     = config.client
-        this.nodeid     = parseInt(config.nodeid)
-        this.timeout    = (parseInt(config.timeout) * 1000 * 60) * 1.1  // convert to milliseconds
-        this.clientConn = RED.nodes.getNode(this.client)
-        //this.wdt        = -1
-        this.wdtStatus  = -1
-        this.alive      = null
+        this.client         = config.client
+        this.nodeid         = parseInt(config.nodeid)
+        this.clientConn     = RED.nodes.getNode(this.client)
+        this.wdt            = parseInt(config.timeout);
+        this.wdtStatus      = -1;
+        this.timerHandle    = null;
+        this.sendStatus     = true;
 
         var node = this
 
+        if (node.clientConn.connected) {
+            node.status({fill:"yellow", shape:"dot", text:"node-red:common.status.connected"});
+        }
+
+        /******************************************************************************************************************
+         * functions
+         *
+         */
+        this.disableTimer = function() {
+            if (node.timerHandle) {    
+                clearTimeout(node.timerHandle);
+                node.timerHandle = null;    
+            }
+        }
+          
+        this.enableTimer = function() {
+            if (node.timerHandle) {
+                RED.log.debug("RFM12MsgBusDeviceStatusNode(enableTimer): clear timer");
+                clearTimeout(node.timerHandle);
+                node.timerHandle = null;
+            }
+
+            if (node.wdt > 0) {
+                RED.log.debug("RFM12MsgBusDeviceStatusNode(enableTimer): node.wdt > 0");
+                node.timerHandle = setTimeout(node.timerProc.bind(this), (node.wdt * 1000 * 60) * 1.1);
+            } else {
+                RED.log.debug("RFM12MsgBusDeviceStatusNode(enableTimer): node.wdt <= 0");
+            }
+        }
+          
+        this.resetTimer = function() {
+            if (node.wdt <= 0) {
+                return;
+            }
+
+            node.enableTimer();
+            RED.log.debug("RFM12MsgBusDeviceStatusNode(resetTimer): node.wdtStatus = " + node.wdtStatus)
+
+            if (node.wdtStatus != 1) {
+                node.wdtStatus = 1
+
+                var status = {
+                    topic: "online",
+                    payload: true
+                };
+
+                var log = {
+                    topic: "log",
+                    payload: {
+                        device: node.nodeid.toString(),
+                        type: "status",
+                        msg: "Online"
+                    }
+                };
+
+                if (!node.sendStatus) {
+                    log = null;
+                }
+
+                node.send([status, log]);
+                node.status({fill:"green", shape:"dot", text:"device online"});
+            }
+        }
+
+        this.timerProc = function() {
+            RED.log.debug("RFM12MsgBusDeviceStatusNode(timerproc): run; wdt = " + node.wdt);
+
+            if (node.wdtStatus != 0) {
+                node.wdtStatus = 0
+    
+                RED.log.debug("RFM12MsgBusDeviceStatusNode(timerproc): timeout");
+
+                var status = {
+                    topic: "online",
+                    payload: false
+                };
+
+                var log = {
+                    topic: "log",
+                    payload: {
+                        device: node.nodeid.toString(),
+                        type: "status",
+                        msg: "Offline"
+                    }
+                };
+
+                if (!node.sendStatus) {
+                    log = null;
+                }
+
+                node.send([status, log]);
+                node.status({fill:"red", shape:"dot", text:"device offline"});
+            }
+        }
+
         if (this.clientConn) {
-            this.status({fill: "red", shape: "ring", text: "node-red:common.status.disconnected"})
+            node.enableTimer();
 
             node.clientConn.register(this)
 
@@ -514,33 +702,34 @@ module.exports = function(RED) {
                 //
                 RED.log.debug("RFM12MsgBusDeviceStatusNode(): callback; sleep = " + sleep.toString())
 
-                startDeviceTimeout((sleep * 1000 * 60) * 1.1, node)
-
-                var msg     = {}
-                msg.topic   = "online"
-                msg.payload = node.nodeid
-
-                node.send(msg)
-
-                node.status({fill: "green", shape: "dot", text: "node-red:common.status.connected"})
+                node.wdt = sleep;
+                node.resetTimer();
             }, node)
 
             if (this.clientConn.connected) {
-                //node.status({fill: "green", shape: "dot", text: "node-red:common.status.connected"})
-            }
 
-            startDeviceTimeout(this.timeout, node)
+            }
         } else {
             this.error(RED._("rfm12.errors.missing-config"))
         }
 
-        this.on('close', function(done) {
-            clearTimeout(node.alive)
+        /******************************************************************************************************************
+         * notifications coming from Node-RED
+         *
+         */
+        this.on('close', function(removed, done) {
+            node.disableTimer();
 
             if (node.clientConn) {
                 node.clientConn.deregister(node, done)
             }
-        })
+
+            if (removed) {
+                // this node has been deleted
+            } else {
+                // this node is being restarted
+            }
+        });
     }
 
     RED.nodes.registerType("rfm12 device-status", RFM12MsgBusDeviceStatusInNode)
@@ -616,11 +805,21 @@ module.exports = function(RED) {
             }
         })
 
-        this.on('close', function(done) {
+        /******************************************************************************************************************
+         * notifications coming from Node-RED
+         *
+         */
+        this.on('close', function(removed, done) {
             if (node.clientConn) {
                 node.clientConn.deregister(node, done)
             }
-        })
+
+            if (removed) {
+                // this node has been deleted
+            } else {
+                // this node is being restarted
+            }
+        });
     }
 
     RED.nodes.registerType("rfm12 io", RFM12MsgBusValueNode)
@@ -629,25 +828,6 @@ module.exports = function(RED) {
 	 * 
 	 *
 	 */
-    function startAliveTimer(node) {
-        if (node.alive == null) {
-            node.alive = setTimeout(aliveTimerExpired, 65000, node)
-        } else {
-            clearTimeout(node.alive)
-            node.alive = setTimeout(aliveTimerExpired, 65000, node)
-        }
-    }
-
-    function aliveTimerExpired(node) {
-        RED.log.debug("aliveTimerExpired()")
-
-        var msg     = {}
-        msg.topic   = "status"
-        msg.payload = "timeout"
-
-        callStatusHandlers(node, msg)
-    }
-
     function callStatusHandlers(node, msg) {
         for (var s in node.ctrlstatus) {
             if (node.ctrlstatus.hasOwnProperty(s)) {
@@ -657,90 +837,6 @@ module.exports = function(RED) {
                     n.handler(msg)
                 }
             }
-        }
-    }
-
-    //
-    //
-    //
-
-    function startDeviceTimeout(timeout, node) {
-        /*if (node.alive == null) {
-            console.log("startTimeout(): first run; timeout = ", timeout)
-            node.alive = setTimeout(deviceAliveTimerExpired, timeout, node)
-        } else {
-            console.log("startTimeout(): not first run; timeout = ", timeout)
-            clearTimeout(node.alive)
-            node.alive = setTimeout(deviceAliveTimerExpired, timeout, node)
-        }*/
-    
-        RED.log.debug("RFM12:startDeviceTimeout(): timeout = " + timeout.toString())
-
-        if (timeout <= 0) {
-            return
-        }
-
-        if (node.alive == null) {
-            RED.log.debug("RFM12:startDeviceTimeout(): first time; " + node.nodeid.toString())
-            node.alive = setTimeout(deviceAliveTimerExpired, timeout, node)
-        } else {
-            RED.log.debug("RFM12:startDeviceTimeout(): not first time; " + node.nodeid.toString())
-            clearTimeout(node.alive)
-            node.alive = setTimeout(deviceAliveTimerExpired, timeout, node)
-
-            RED.log.debug("RFM12:startDeviceTimeout(): node.wdtStatus = " + node.wdtStatus)
-
-            if (node.wdtStatus != 1) {
-                node.wdtStatus = 1
-
-                var msg = {
-                    topic:   "status",
-                    payload: "online"
-                }
-                   
-                //
-                // call nodes online/offline function
-                //
-                //node.online(true)
-
-                //node.send([null, null, msg])
-            }
-        }
-
-    }
-
-    function deviceAliveTimerExpired(node) {
-        /*console.log("deviceAliveTimerExpired()")
-
-        var msg     = {}
-        msg.topic   = "offline"
-        msg.payload = node.nodeid
-
-        node.send(msg)
-
-        node.status({fill: "red", shape: "ring", text: "node-red:common.status.disconnected"})*/
-        RED.log.debug("RFM12:aliveTimerExpired(): " + node.nodeid.toString())
-        
-        /*
-        node.wdtStatus:
-        -1 = First time
-        0  = Not connected
-        1  = Connected
-        */
-
-        RED.log.debug("RFM12:aliveTimerExpired(): node.wdtStatus = " + node.wdtStatus)
-        
-        if (node.wdtStatus != 0) {
-            node.wdtStatus = 0
-            
-            var msg = {
-                topic:   "offline",
-                payload: node.nodeid
-            }
-                
-            node.send(msg)
-            
-            node.status({fill: "red", shape: "ring", text: "node-red:common.status.disconnected"})
         }
     }
 }
